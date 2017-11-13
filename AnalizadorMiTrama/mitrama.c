@@ -18,6 +18,10 @@ void analizaTrama(struct tramaInfo *info,unsigned char trama[]){
     chequeo(info,trama);
     logica(info,trama);
     error(info,trama);
+    printTramaBinaria(info,trama);
+    printTramaHex(info,trama);
+    printTramaInfo(info,trama);
+    printf("------------------------\n");
 }
 void usuario(struct tramaInfo *info,unsigned char trama[]){
     idioma(info,trama);
@@ -91,8 +95,14 @@ void printTramaInfo(struct tramaInfo *info,unsigned char trama[]){
         printf("Idioma: ---\n");
     }
     printf("Longitud mensaje: %i bytes\n",info->mlen);
-    printf("ID Destino: %i\n",info->idDestino);
-    printf("ID Origen: %i\n",info->idOrigen);
+    printf("ID Destino: 0x%02x\n",info->idDestino);
+    printf("Grupo: %d\n",trama[info->mlen+1]>>6);
+    printf("No. lista: %d\n",trama[info->mlen+1]&0x4f);
+
+    printf("ID Origen: 0x%02x\n",info->idOrigen);
+    printf("Grupo: %d\n",trama[info->mlen+2]>>6);
+    printf("No. lista: %d\n",trama[info->mlen+2]&0x4f);
+
     printf("Mensaje: ");
     for(int i=0;i<info->mlen;i++){
         printf("%c",trama[i+1]);
@@ -112,6 +122,42 @@ void printTramaInfo(struct tramaInfo *info,unsigned char trama[]){
     if(info->controlError==BIT_DE_PARIDAD){
         printf("Tipo de paridad: %s\n",tiposParidad[info->tipoParidad]);
     }
+    printf("FCS de la trama: ");
+    switch (info->controlError) {
+    case BIT_DE_PARIDAD:
+        printf("%d",trama[info->mlen+3]&1);
+        break;
+    case CRC:
+        printf("%02X",trama[info->mlen+4]);
+        break;
+    case CHEKSUM:
+        printf("%02X%02X",trama[info->mlen+4],trama[info->mlen+5]);
+        break;
+    case XOR_POR_BYTES:
+        printf("%02X",trama[info->mlen+4]);
+        break;
+    }
+    printf("\n");
+    printf("FCS calculado: ");
+    switch (info->controlError) {
+    case BIT_DE_PARIDAD:
+        if(info->error){
+            printf("%d",(~trama[info->mlen+3])&1);
+        }else{
+            printf("%d",trama[info->mlen+3]&1);
+        }
+        break;
+    case CRC:
+        printf("%02X",trama[info->mlen+4]);
+        break;
+    case CHEKSUM:
+         printf("%04X",calcularCampoCheksum(info,trama));
+        break;
+    case XOR_POR_BYTES:
+        printf("%02X",calcularByteXOR(info,trama));
+        break;
+    }
+    printf("\n");
     if(validarCodLinea(info)){
         printf("Codigo de linea: %s\n",codigosLinea[info->codLinea]);
     }else{
@@ -179,7 +225,10 @@ void errorBitParidad(struct tramaInfo *info, unsigned char trama[]){
     if(info->tipoParidad==PAR){
         info->error=unos%2;
     }else{
-        info->error=!(unos%2);
+        if(unos%2==0)
+            info->error=1;
+        else
+            info->error=0;
     }
 }
 void errorXOR(struct tramaInfo *info, unsigned char trama[]){
